@@ -176,7 +176,7 @@ std::string makeNewDib(const Image& im, LongDib isLong)
     header.bV5Height = im.height();
     header.bV5Planes = 1;
     header.bV5BitCount = 32;
-    header.bV5ClrUsed = 3;
+    header.bV5ClrUsed = 0;
     header.bV5Compression = BI_BITFIELDS;
     header.bV5SizeImage = im.nBytes();
     header.bV5RedMask = Rgba::R_MASK;
@@ -233,7 +233,7 @@ int main()
         auto bottomScan = image.scanLine(y9);
         std::fill(bottomScan.begin(), bottomScan.end(), GREEN);
         // Copy!
-        copyToClipboard(image, Format::DIB_NEW_LONG);
+        copyToClipboard(image, Format::DIB_NEW_SHORT);
         std::cout << "Successfully copied!\n";
     } catch (const std::exception& e) {
         std::cout << "ERROR: " << e.what() << '\n';

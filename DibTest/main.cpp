@@ -23,6 +23,8 @@ struct Rgba {
 };
 
 constexpr Rgba WHITE { .b = 0xFF, .g = 0xFF, .r = 0xFF };
+constexpr Rgba AQUA { .b = 0xFF, .g = 0xFF, .r = 0 };
+constexpr Rgba MISTY { .b = 0xE1, .g = 0xE4, .r = 0xFF };
 constexpr Rgba RED { .b = 0, .g = 0, .r = 0xFF };
 constexpr Rgba GREEN { .b = 0, .g = 0xAA, .r = 0 };
 constexpr Rgba BLUE { .b = 0xFF, .g = 0, .r = 0 };
@@ -43,6 +45,8 @@ public:
     size_t nBytes() const { return area() * sizeof(Rgba); }
     std::span<Rgba> scanLine(size_t y);
     std::span<const Rgba> scanLine(size_t y) const;
+    Rgba* data() { return fData.data(); }
+    const Rgba* data() const { return fData.data(); }
 private:
     size_t fWidth = 0, fHeight = 0;
     std::vector<Rgba> fData;
@@ -109,39 +113,6 @@ void writeImageData(std::ostream& os, const Image& im)
     }
 }
 
-class Clipboard
-{
-public:
-    Clipboard();
-    ~Clipboard();
-};
-
-Clipboard::Clipboard()
-{
-    if (!OpenClipboard(nullptr))
-        throw std::logic_error("Cannot open clipboard");
-}
-
-Clipboard::~Clipboard()
-{
-    CloseClipboard();
-}
-
-void copyRawToClipboard(uint32_t nativeFormat, std::string_view data)
-{
-    Clipboard _;
-
-    auto globalData = GlobalAlloc(GMEM_MOVEABLE, data.size());
-    if (!globalData)
-        throw std::logic_error("Cannot allocate data");
-    auto copyData = GlobalLock(globalData);
-    memcpy(copyData, data.data(), data.size());
-    GlobalUnlock(globalData);
-
-    EmptyClipboard();
-    SetClipboardData(nativeFormat, globalData);
-}
-
 std::string makeOldDib(const Image& im)
 {
     std::ostringstream os;
@@ -195,45 +166,114 @@ std::string makeNewDib(const Image& im, LongDib isLong)
     return os.str();
 }
 
-enum class Format { DIB_OLD, DIB_NEW_SHORT, DIB_NEW_LONG };
+enum class Format { DIB_OLD, DIB_NEW_SHORT, DIB_NEW_LONG, BITMAP };
 
-void copyToClipboard(const Image& im, Format fmt)
+class Clipboard
+{
+public:
+    Clipboard();
+    ~Clipboard();
+
+    void copyRaw(uint32_t nativeFormat, std::string_view data);
+    void copyBitmap(const Image& im);
+    void copyImage(const Image& im, Format fmt);
+private:
+    void clearIf();
+    bool needClear = true;
+};
+
+Clipboard::Clipboard()
+{
+    if (!OpenClipboard(nullptr))
+        throw std::logic_error("Cannot open clipboard");
+}
+
+Clipboard::~Clipboard()
+{
+    CloseClipboard();
+}
+
+void Clipboard::clearIf()
+{
+    if (needClear) {
+        EmptyClipboard();
+        needClear = false;
+    }
+}
+
+void Clipboard::copyRaw(uint32_t nativeFormat, std::string_view data)
+{
+    clearIf();
+
+    auto globalData = GlobalAlloc(GMEM_MOVEABLE, data.size());
+    if (!globalData)
+        throw std::logic_error("Cannot allocate data");
+    auto copyData = GlobalLock(globalData);
+    memcpy(copyData, data.data(), data.size());
+    GlobalUnlock(globalData);
+
+    SetClipboardData(nativeFormat, globalData);
+}
+
+void Clipboard::copyBitmap(const Image& im)
+{
+    clearIf();
+    HBITMAP bm = CreateBitmap(im.width(), im.height(), 1, 32, im.data());
+    SetClipboardData(CF_BITMAP, bm);
+}
+
+
+void Clipboard::copyImage(const Image& im, Format fmt)
 {
     LongDib isLong = LongDib::NO;
     switch (fmt) {
     case Format::DIB_OLD: {
             auto data = makeOldDib(im);
-            copyRawToClipboard(CF_DIB, data);
+            copyRaw(CF_DIB, data);
         } break;
     case Format::DIB_NEW_LONG:
         isLong = LongDib::YES;
         [[fallthrough]];
     case Format::DIB_NEW_SHORT: {
             auto data = makeNewDib(im, isLong);
-            copyRawToClipboard(CF_DIBV5, data);
-        }
+            copyRaw(CF_DIBV5, data);
+        } break;
+    case Format::BITMAP:
+        copyBitmap(im);
     }
+}
+
+Image makeImage(Rgba bg)
+{
+    Image image(12, 10, bg);
+    size_t x0 = 0, x9 = image.width() - 1;
+    size_t y0 = 0, y9 = image.height() - 1;
+    // Left yellow, right blue
+    for (size_t y = 1; y < y9; ++y) {
+        image(y, x0) = YELLOW;
+        image(y, x9) = BLUE;
+    }
+    // Top red
+    auto topScan = image.scanLine(y0);
+    std::fill(topScan.begin(), topScan.end(), RED);
+    // Bottom green
+    auto bottomScan = image.scanLine(y9);
+    std::fill(bottomScan.begin(), bottomScan.end(), GREEN);
+
+    return image;
 }
 
 int main()
 {
     try {
-        Image image(12, 10, WHITE);
-        size_t x0 = 0, x9 = image.width() - 1;
-        size_t y0 = 0, y9 = image.height() - 1;
-        // Left yellow, right blue
-        for (size_t y = 1; y < y9; ++y) {
-            image(y, x0) = YELLOW;
-            image(y, x9) = BLUE;
-        }
-        // Top red
-        auto topScan = image.scanLine(y0);
-        std::fill(topScan.begin(), topScan.end(), RED);
-        // Bottom green
-        auto bottomScan = image.scanLine(y9);
-        std::fill(bottomScan.begin(), bottomScan.end(), GREEN);
+        Image imWhite = makeImage(WHITE);
+        Image imMisty = makeImage(MISTY);
+        Image imAqua = makeImage(AQUA);
         // Copy!
-        copyToClipboard(image, Format::DIB_NEW_SHORT);
+        Clipboard clip;
+        clip.copyImage(imMisty, Format::DIB_NEW_LONG);
+        clip.copyImage(imAqua, Format::DIB_OLD);
+        clip.copyImage(imWhite, Format::BITMAP);
         std::cout << "Successfully copied!\n";
     } catch (const std::exception& e) {
         std::cout << "ERROR: " << e.what() << '\n';

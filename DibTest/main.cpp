@@ -17,18 +17,22 @@ static_assert(std::endian::native == std::endian::little);
 struct Rgba {
     unsigned char b = 0xFF, g = 0xFF, r = 0xFF, a = 0xFF;
 
-    static constexpr uint32_t R_MASK = 0xFF0000;
-    static constexpr uint32_t G_MASK =   0xFF00;
-    static constexpr uint32_t B_MASK =     0xFF;
+    static constexpr uint32_t A_MASK = 0xFF000000;
+    static constexpr uint32_t R_MASK =   0xFF0000;
+    static constexpr uint32_t G_MASK =     0xFF00;
+    static constexpr uint32_t B_MASK =       0xFF;
 };
 
-constexpr Rgba WHITE { .b = 0xFF, .g = 0xFF, .r = 0xFF };
-constexpr Rgba AQUA { .b = 0xFF, .g = 0xFF, .r = 0 };
-constexpr Rgba MISTY { .b = 0xE1, .g = 0xE4, .r = 0xFF };
-constexpr Rgba RED { .b = 0, .g = 0, .r = 0xFF };
-constexpr Rgba GREEN { .b = 0, .g = 0xAA, .r = 0 };
-constexpr Rgba BLUE { .b = 0xFF, .g = 0, .r = 0 };
-constexpr Rgba YELLOW { .b = 0, .g = 0xD7, .r = 0xFF };
+[[maybe_unused]] constexpr Rgba WHITE      { .b = 0xFF, .g = 0xFF, .r = 0xFF };
+[[maybe_unused]] constexpr Rgba AQUA       { .b = 0xFF, .g = 0xFF, .r = 0 };
+[[maybe_unused]] constexpr Rgba MISTY      { .b = 0xE1, .g = 0xE4, .r = 0xFF };
+[[maybe_unused]] constexpr Rgba SEMI_BLACK { .b = 0, .g = 0, .r = 0, .a = 0x40 };
+[[maybe_unused]] constexpr Rgba SEMI_AQUA  { .b = 0xFF, .g = 0xFF, .r = 0, .a = 0x40 };
+[[maybe_unused]] constexpr Rgba SEMI_PINK  { .b = 0xFF, .g = 0, .r = 0xFF, .a = 0x40 };
+[[maybe_unused]] constexpr Rgba RED        { .b = 0, .g = 0, .r = 0xFF };
+[[maybe_unused]] constexpr Rgba GREEN      { .b = 0, .g = 0xAA, .r = 0 };
+[[maybe_unused]] constexpr Rgba BLUE       { .b = 0xFF, .g = 0, .r = 0 };
+[[maybe_unused]] constexpr Rgba YELLOW     { .b = 0, .g = 0xD7, .r = 0xFF };
 
 class Image {
 public:
@@ -153,6 +157,7 @@ std::string makeNewDib(const Image& im, LongDib isLong)
     header.bV5RedMask = Rgba::R_MASK;
     header.bV5GreenMask = Rgba::G_MASK;
     header.bV5BlueMask = Rgba::B_MASK;
+    header.bV5AlphaMask = Rgba::A_MASK;
     // No alpha for now
     header.bV5CSType = LCS_sRGB;
     header.bV5Intent = LCS_GM_IMAGES;
@@ -266,14 +271,14 @@ Image makeImage(Rgba bg)
 int main()
 {
     try {
-        Image imWhite = makeImage(WHITE);
-        Image imMisty = makeImage(MISTY);
-        Image imAqua = makeImage(AQUA);
+        Image imBlack = makeImage(SEMI_BLACK);
+        Image imPink = makeImage(SEMI_PINK);
+        Image imAqua = makeImage(SEMI_AQUA);
         // Copy!
         Clipboard clip;
-        clip.copyImage(imMisty, Format::DIB_NEW_LONG);
         clip.copyImage(imAqua, Format::DIB_OLD);
-        clip.copyImage(imWhite, Format::BITMAP);
+        clip.copyImage(imPink, Format::DIB_NEW_LONG);
+        clip.copyImage(imBlack, Format::BITMAP);
         std::cout << "Successfully copied!\n";
     } catch (const std::exception& e) {
         std::cout << "ERROR: " << e.what() << '\n';

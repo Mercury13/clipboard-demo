@@ -33,3 +33,4 @@
 
 # Qt Creator temp files
 *.pro.user
+build-*
